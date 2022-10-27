@@ -21,11 +21,21 @@ interface MintbaseEventLogData {
   memo: string,
 }
 
+const CONTACT_ADDR = "dev-1666200445140-19169904957827"
+
 async function handleStreamerMessage(
   streamerMessage: types.StreamerMessage
 ): Promise<void> {
   //const createdOn = new Date(streamerMessage.block.header.timestamp / 1000000)
-  console.log("transactions:", JSON.stringify(streamerMessage.shards[0].chunk, null, 2))
+  streamerMessage
+    .shards.map(s => s.chunk)
+    .filter(c => c !== null)
+    .flatMap(t => t.receipts)
+    .forEach(r => {
+      if(r.receiverId == CONTACT_ADDR) {
+        console.log(r.receipt)
+      }
+    })
   // const relevantOutcomes = streamerMessage
   //   .shards
   //   .flatMap(shard => shard.receiptExecutionOutcomes)
