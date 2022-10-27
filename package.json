@@ -1,0 +1,18 @@
+{
+  "name": "lake-nft-indexer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "tsc && node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.3",
+    "near-api-js": "^1.1.0",
+    "near-lake-framework": "^1.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^18.11.5",
+    "typescript": "^4.6.4"
+  }
+}
