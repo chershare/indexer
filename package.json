@@ -9,7 +9,8 @@
   "dependencies": {
     "dotenv": "^16.0.3",
     "near-api-js": "^1.1.0",
-    "near-lake-framework": "^1.0.2"
+    "near-lake-framework": "^1.0.2",
+    "sqlite3": "^5.1.2"
   },
   "devDependencies": {
     "@types/node": "^18.11.5",
