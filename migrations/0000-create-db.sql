@@ -5,6 +5,7 @@ CREATE TABLE resources (
   title VARCHAR(256), 
   description TEXT, 
   contact_info TEXT, 
+
   pricing_model VARCHAR(20), 
   pricing_price_per_ms REAL, 
   pricing_price_fixed_base REAL, /* [1] */

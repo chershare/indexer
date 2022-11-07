@@ -3,14 +3,14 @@ DROP TABLE IF EXISTS resource_images;
 
 CREATE TABLE resource_tags (
   tag TEXT, 
-  resource_id TEXT, 
-  FOREIGN KEY (resource_id) REFERENCES resources (id) 
+  resource_name VARCHAR(36), 
+  FOREIGN KEY (resource_name) REFERENCES resources (name) 
 );
 
 CREATE TABLE resource_images (
-  resource_id TEXT, 
+  resource_name VARCHAR(36), 
   image_url TEXT, 
-  FOREIGN KEY (resource_id) REFERENCES resources (id) 
+  FOREIGN KEY (resource_name) REFERENCES resources (name) 
 );
 
 

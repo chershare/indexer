@@ -6,7 +6,7 @@ import { startStream, types } from 'near-lake-framework';
 
 import * as sqlite3 from 'sqlite3'
 
-const CONTACT_ADDR = "dev-1666200445140-19169904957827"
+const CONTACT_ADDR = "dev-1667639146606-57835171345116"
 
 let db: sqlite3.Database
 
@@ -21,19 +21,11 @@ async function handleStreamerMessage(
       if(r.receiverId == CONTACT_ADDR) {
         if("Action" in r.receipt) {
           const action = r.receipt.Action
-          console.log(action)
           action.actions.forEach((a: types.Action) => {
             if(a !== "CreateAccount" && "FunctionCall" in a) {
               const functionCall = a.FunctionCall
-              const argsString = Buffer.from(functionCall.args, 'base64').toString('utf8')
-              const args = JSON.parse(argsString) 
-              console.log("called", 
-                functionCall.methodName, 
-                argsString, // TODO: is it really utf8?
-                functionCall.gas, 
-                functionCall.deposit
-              )
               if(functionCall.methodName == 'create_resource') {
+                let args = parseArgs(functionCall.args)
                 handleCreateResource(args)
               }
             }
@@ -41,6 +33,11 @@ async function handleStreamerMessage(
         }
       }
     })
+}
+
+function parseArgs(s: string) {
+  const argsString = Buffer.from(s, 'base64').toString('utf8')
+  return JSON.parse(argsString) 
 }
 
 // let checkId 
@@ -52,35 +49,67 @@ let createResourceQuery : sqlite3.Statement
 let addResourceImageQuery: sqlite3.Statement
 let addResourceTagQuery: sqlite3.Statement
 function prepareStatements() {
-  createResourceQuery = db.prepare("INSERT INTO resources VALUES (?, ?, ?, ?, ?)")
-  addResourceImageQuery = db.prepare("INSERT INTO resource_images VALUES (?, ?)")
-  addResourceTagQuery = db.prepare("INSERT INTO resource_tags VALUES (?, ?)")
+  createResourceQuery = db.prepare("INSERT INTO resources VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
+  addResourceImageQuery = db.prepare("INSERT INTO resource_images VALUES (?,?)")
+  addResourceTagQuery = db.prepare("INSERT INTO resource_tags VALUES (?,?)")
 }
 function finalizePreparedStatements() {
   createResourceQuery.finalize() 
   addResourceImageQuery.finalize()
   addResourceTagQuery.finalize()
 }
+
+const EARTH_RADIUS_KM = 6371
+function transformCoordinates(lat: number, lon: number){
+    const phi   = (90-lat)*(Math.PI/180);
+    const theta = (lon+180)*(Math.PI/180);
+
+    let x = -(EARTH_RADIUS_KM * Math.sin(phi)*Math.cos(theta));
+    let z = (EARTH_RADIUS_KM * Math.sin(phi)*Math.sin(theta));
+    let y = (EARTH_RADIUS_KM * Math.cos(phi));
+  
+    return [x,y,z];
+}
+
 async function handleCreateResource(args: any) {
-  createResourceQuery.run(args.id, args.title, args.description, "SimpleRent", args.price_per_ms)
-  if(args.imageUrls) {
-    args.imageUrls.forEach((url: string) => {
-      addResourceImageQuery.run(args.id, url)
+  console.log(`create_resource(\n${JSON.stringify(args, null, ' ')})\n)`) 
+  let rip = args.resource_init_params
+  let pricingModel = Object.keys(rip.pricing)[0]
+  let pricing = rip.pricing[pricingModel]
+
+  let xyz = transformCoordinates(rip.coordinates[0], rip.coordinates[1]) 
+
+  createResourceQuery.run(
+    args.name, 
+
+    rip.title, 
+    rip.description, 
+    rip.contact, 
+
+    pricingModel, 
+    pricing.price_per_ms, 
+    pricing.price_fixed_base, 
+    pricing.refund_buffer, 
+
+    ...xyz, 
+
+    rip.min_duration_ms, 
+  )
+  if(rip.imageUrls) {
+    rip.imageUrls.forEach((url: string) => {
+      addResourceImageQuery.run(args.name, url)
     }) 
   }
-  if(args.tags) {
-    args.tags.forEach((tag: string) => {
-      addResourceTagQuery.run(tag, args.id)
+  if(rip.tags) {
+    rip.tags.forEach((tag: string) => {
+      addResourceTagQuery.run(tag, args.name)
     }) 
   }
-  console.log("inserted into db") 
 }
 
 (async () => {
   await new Promise<void>((resolve, reject) => {
-    console.log("trying to connect to", process.env.SQLITE_DB)
     db = new sqlite3.Database(process.env.SQLITE_DB, err => {
-      console.log("something happened")
       if(err) {
         reject("could not connect to the db") 
       } else {
@@ -89,8 +118,6 @@ async function handleCreateResource(args: any) {
       }
     })
   })
-
-  console.log(db)
 
   const connectionConfig = {
     networkId: "testnet",
