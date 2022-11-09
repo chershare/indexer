@@ -6,7 +6,7 @@ import { startStream, types } from 'near-lake-framework';
 
 import * as sqlite3 from 'sqlite3'
 
-const CONTACT_ADDR = "dev-1667639146606-57835171345116"
+const CONTACT_ADDR = process.env.CONTRACT_ACCOUNT_ID 
 
 let db: sqlite3.Database
 
@@ -27,6 +27,9 @@ async function handleStreamerMessage(
               if(functionCall.methodName == 'create_resource') {
                 let args = parseArgs(functionCall.args)
                 handleCreateResource(args)
+              }
+              if(functionCall.methodName == 'create_resource_callback') {
+                console.log(JSON.stringify(functionCall))
               }
             }
           })
