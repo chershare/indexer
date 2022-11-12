@@ -1,0 +1,6 @@
+.env
+db.sqlite
+error.log
+index.js
+node_modules
+
