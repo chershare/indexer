@@ -10,6 +10,7 @@ CREATE TABLE resource_tags (
 CREATE TABLE resource_images (
   resource_name VARCHAR(36), 
   image_url TEXT, 
+  position INT, 
   FOREIGN KEY (resource_name) REFERENCES resources (name) 
 );
 

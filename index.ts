@@ -53,7 +53,7 @@ let addResourceImageQuery: sqlite3.Statement
 let addResourceTagQuery: sqlite3.Statement
 function prepareStatements() {
   createResourceQuery = db.prepare("INSERT INTO resources VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
-  addResourceImageQuery = db.prepare("INSERT INTO resource_images VALUES (?,?)")
+  addResourceImageQuery = db.prepare("INSERT INTO resource_images VALUES (?,?,?)")
   addResourceTagQuery = db.prepare("INSERT INTO resource_tags VALUES (?,?)")
 }
 function finalizePreparedStatements() {
@@ -80,7 +80,7 @@ async function handleCreateResource(args: any) {
   let pricingModel = Object.keys(rip.pricing)[0]
   let pricing = rip.pricing[pricingModel]
 
-  let xyz = transformCoordinates(rip.coordinates[0], rip.coordinates[1]) 
+  let [x, y, z] = transformCoordinates(rip.coordinates[0], rip.coordinates[1]) 
 
   createResourceQuery.run(
     args.name, 
@@ -94,13 +94,13 @@ async function handleCreateResource(args: any) {
     pricing.price_fixed_base, 
     pricing.refund_buffer, 
 
-    ...xyz, 
+    x, y, z, 
 
-    rip.min_duration_ms, 
+    rip.min_duration_ms
   )
-  if(rip.imageUrls) {
-    rip.imageUrls.forEach((url: string) => {
-      addResourceImageQuery.run(args.name, url)
+  if(rip.image_urls) {
+    rip.image_urls.forEach((url: string, i: number) => {
+      addResourceImageQuery.run(args.name, url, i)
     }) 
   }
   if(rip.tags) {
