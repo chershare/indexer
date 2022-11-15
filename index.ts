@@ -52,7 +52,10 @@ let createResourceQuery : sqlite3.Statement
 let addResourceImageQuery: sqlite3.Statement
 let addResourceTagQuery: sqlite3.Statement
 function prepareStatements() {
-  createResourceQuery = db.prepare("INSERT INTO resources VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
+  function nArgs(n: number) {
+    return "?,".repeat(n).slice(0,-1)
+  }
+  createResourceQuery = db.prepare(`INSERT INTO resources VALUES (${nArgs(11)})`)
   addResourceImageQuery = db.prepare("INSERT INTO resource_images VALUES (?,?,?)")
   addResourceTagQuery = db.prepare("INSERT INTO resource_tags VALUES (?,?)")
 }
@@ -77,8 +80,6 @@ function transformCoordinates(lat: number, lon: number){
 async function handleCreateResource(args: any) {
   console.log(`create_resource(\n${JSON.stringify(args, null, ' ')})\n)`) 
   let rip = args.resource_init_params
-  let pricingModel = Object.keys(rip.pricing)[0]
-  let pricing = rip.pricing[pricingModel]
 
   let [x, y, z] = transformCoordinates(rip.coordinates[0], rip.coordinates[1]) 
 
@@ -89,10 +90,9 @@ async function handleCreateResource(args: any) {
     rip.description, 
     rip.contact, 
 
-    pricingModel, 
-    pricing.price_per_ms, 
-    pricing.price_fixed_base, 
-    pricing.refund_buffer, 
+    rip.pricing.price_per_ms, 
+    rip.pricing.price_per_booking, 
+    rip.pricing.full_refund_period_ms, 
 
     x, y, z, 
 

@@ -6,10 +6,9 @@ CREATE TABLE resources (
   description TEXT, 
   contact_info TEXT, 
 
-  pricing_model VARCHAR(20), 
-  pricing_price_per_ms REAL, 
-  pricing_price_fixed_base REAL, /* [1] */
-  pricing_refund_buffer INTEGER
+  price_per_ms REAL, 
+  price_per_booking REAL, /* [1] */
+  full_refund_period_ms INTEGER
 );
 
 /* 
