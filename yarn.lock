@@ -1481,10 +1481,8 @@ near-api-js@^1.1.0:
     text-encoding-utf-8 "^1.0.2"
     tweetnacl "^1.0.1"
 
-near-lake-framework@^1.0.2:
+"near-lake-framework@file:../../../source/near-lake-framework-js":
   version "1.0.4"
-  resolved "https://registry.yarnpkg.com/near-lake-framework/-/near-lake-framework-1.0.4.tgz#296c1ef7fd3ae75e2d466c567617f786d8793dd0"
-  integrity sha512-OMHwDsD46ZqR6UjdaoIjUL01b9fIZ3klov2X3EDM9v/oinCdCoagjML3GJE1ZpbsBsT5WvxkeFFo6vqD83LjOw==
   dependencies:
     "@aws-sdk/client-s3" "^3.32.0"
 

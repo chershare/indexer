@@ -1,9 +1,9 @@
 DROP TABLE IF EXISTS bookings;
 
 CREATE TABLE bookings (
-  resource_name VARCHAR(36) PRIMARY KEY,  /* [2] */
-  begin INTEGER
-  end INTEGER
-  price_paid REAL
-  cancelled BOOLEAN
+  resource_name VARCHAR(36), 
+  booker_account_id TEXT, 
+  begin INTEGER, 
+  end INTEGER, 
+  FOREIGN KEY (resource_name) REFERENCES resources (name) 
 );

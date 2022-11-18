@@ -8,6 +8,8 @@ import * as sqlite3 from 'sqlite3'
 
 const CONTACT_ADDR = process.env.CONTRACT_ACCOUNT_ID 
 
+const resourceContractAccountIds = new Set()
+
 let db: sqlite3.Database
 
 async function handleStreamerMessage(
@@ -18,7 +20,21 @@ async function handleStreamerMessage(
     .filter(c => c !== null)
     .flatMap(t => t.receipts)
     .forEach(r => {
-      if(r.receiverId == CONTACT_ADDR) {
+      if(resourceContractAccountIds.has(r.receiverId)) {
+        if("Action" in r.receipt) {
+          const action = r.receipt.Action
+          action.actions.forEach((a: types.Action) => {
+            if(a !== "CreateAccount" && "FunctionCall" in a) {
+              const functionCall = a.FunctionCall
+              if(functionCall.methodName == 'book') {
+                let args = parseArgs(functionCall.args)
+                let resourceName = r.receiverId.slice(0, - ( 1 + CONTACT_ADDR.length))
+                handleBook(resourceName, action.signerId, args) 
+              }
+            }
+          })
+        }
+      } else if(r.receiverId == CONTACT_ADDR) {
         if("Action" in r.receipt) {
           const action = r.receipt.Action
           action.actions.forEach((a: types.Action) => {
@@ -29,6 +45,7 @@ async function handleStreamerMessage(
                 handleCreateResource(args)
               }
               if(functionCall.methodName == 'create_resource_callback') {
+                // TODO: log event, to make sure contract creation has been successful - only then store to db
                 console.log(JSON.stringify(functionCall))
               }
             }
@@ -51,6 +68,7 @@ function parseArgs(s: string) {
 let createResourceQuery : sqlite3.Statement
 let addResourceImageQuery: sqlite3.Statement
 let addResourceTagQuery: sqlite3.Statement
+let createBookingQuery: sqlite3.Statement
 function prepareStatements() {
   function nArgs(n: number) {
     return "?,".repeat(n).slice(0,-1)
@@ -58,6 +76,7 @@ function prepareStatements() {
   createResourceQuery = db.prepare(`INSERT INTO resources VALUES (${nArgs(11)})`)
   addResourceImageQuery = db.prepare("INSERT INTO resource_images VALUES (?,?,?)")
   addResourceTagQuery = db.prepare("INSERT INTO resource_tags VALUES (?,?)")
+  createBookingQuery = db.prepare(`INSERT INTO bookings VALUES (${nArgs(4)})`)
 }
 function finalizePreparedStatements() {
   createResourceQuery.finalize() 
@@ -108,10 +127,35 @@ async function handleCreateResource(args: any) {
       addResourceTagQuery.run(tag, args.name)
     }) 
   }
+
+  // add new contract to the list
+  resourceContractAccountIds.add(
+    makeResourceContractAccountId(args.name)
+  ) 
 }
 
-(async () => {
-  await new Promise<void>((resolve, reject) => {
+function makeResourceContractAccountId(resourceName: string) {
+  return resourceName + "." + CONTACT_ADDR 
+}
+
+async function handleBook(resourceName: string, bookerAccountId: string, args: any) {
+  console.log(`book(\n${JSON.stringify(args, null, ' ')})\n)\nsigner: ${bookerAccountId}\nresource: ${resourceName}`)
+  createBookingQuery.run(
+    resourceName, 
+    bookerAccountId, 
+    args.start, 
+    args.end,
+    (_runResult: sqlite3.RunResult, err: Error) => {
+      if(err) {
+        console.log("error creating booking: " + err) 
+      }
+    }
+  ) 
+}
+
+
+function connectToDb() {
+  return new Promise<void>((resolve, reject) => {
     db = new sqlite3.Database(process.env.SQLITE_DB, err => {
       if(err) {
         reject("could not connect to the db") 
@@ -120,7 +164,38 @@ async function handleCreateResource(args: any) {
         resolve()
       }
     })
+    db.configure('busyTimeout', 30000)
   })
+}
+
+interface ResourceNamesRow {
+  name: string
+}
+function loadResourceContracts() {
+  return new Promise<void>((resolve, reject) => {
+    db.all("SELECT name from resources", {}, (err: any, rows: ResourceNamesRow[]) => {
+      console.log(rows) 
+      if(err) {
+        reject("Failed to get list of current contracts from db") 
+      } else {
+        rows.forEach(
+          row => {
+            console.log(row.name)
+            resourceContractAccountIds.add(
+              makeResourceContractAccountId(row.name)
+            ) 
+          }
+        ) 
+        console.log("watching resources:" + Array.from(resourceContractAccountIds).join(', ')) 
+        resolve()
+      }
+    }) 
+  })
+}
+
+(async () => {
+  await connectToDb()
+  await loadResourceContracts()
 
   const connectionConfig = {
     networkId: "testnet",
