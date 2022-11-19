@@ -12,53 +12,94 @@ const resourceContractAccountIds = new Set()
 
 let db: sqlite3.Database
 
+
+function parseLog(log: string) {
+  let colon = log.indexOf(":") 
+  let event = log.slice(0, colon)
+  let data = JSON.parse(log.slice(colon + 1))
+  return [event, data]
+}
+
 async function handleStreamerMessage(
   streamerMessage: types.StreamerMessage
 ): Promise<void> {
-  streamerMessage
-    .shards.map(s => s.chunk)
-    .filter(c => c !== null)
-    .flatMap(t => t.receipts)
-    .forEach(r => {
-      if(resourceContractAccountIds.has(r.receiverId)) {
-        if("Action" in r.receipt) {
-          const action = r.receipt.Action
-          action.actions.forEach((a: types.Action) => {
-            if(a !== "CreateAccount" && "FunctionCall" in a) {
-              const functionCall = a.FunctionCall
-              if(functionCall.methodName == 'book') {
-                let args = parseArgs(functionCall.args)
-                let resourceName = r.receiverId.slice(0, - ( 1 + CONTACT_ADDR.length))
-                handleBook(resourceName, action.signerId, args) 
+  streamerMessage.shards.flatMap(shard => shard.receiptExecutionOutcomes) 
+    .forEach(outcome => {
+      const receiverId = outcome.receipt.receiverId
+      if(resourceContractAccountIds.has(receiverId)) {
+        outcome.executionOutcome.outcome.logs.forEach(log => {
+          let [event, data] = parseLog(log) 
+          if(event == 'BookingCreation') {
+            let resourceName = receiverId.slice(0, - ( 1 + CONTACT_ADDR.length))
+            console.log(`book(\n${JSON.stringify(data, null, ' ')})\n)`)
+            createBookingQuery.run(
+              data.id, 
+              resourceName, 
+              data.booker_account_id, 
+              data.start, 
+              data.end,
+              data.price, 
+              (_runResult: sqlite3.RunResult, err: Error) => {
+                if(err) {
+                  console.log("error creating booking: " + err) 
+                }
               }
-            }
-          })
-        }
-      } else if(r.receiverId == CONTACT_ADDR) {
-        if("Action" in r.receipt) {
-          const action = r.receipt.Action
-          action.actions.forEach((a: types.Action) => {
-            if(a !== "CreateAccount" && "FunctionCall" in a) {
-              const functionCall = a.FunctionCall
-              if(functionCall.methodName == 'create_resource') {
-                let args = parseArgs(functionCall.args)
-                handleCreateResource(args)
-              }
-              if(functionCall.methodName == 'create_resource_callback') {
-                // TODO: log event, to make sure contract creation has been successful - only then store to db
-                console.log(JSON.stringify(functionCall))
-              }
-            }
-          })
-        }
+            ) 
+          }
+        }) 
+      } else if (receiverId == CONTACT_ADDR) {
+        outcome.executionOutcome.outcome.logs.forEach(log => {
+          let [event, data] = parseLog(log) 
+          if(event == 'ResourceCreation') {
+            console.log('resource created', JSON.stringify(data)) 
+            handleCreateResource(data.name, data.init_params) 
+          }
+        }) 
       }
-    })
+    }) 
+    // .shards.map(s => s.chunk)
+    // .filter(c => c !== null)
+    // .flatMap(t => t.receipts)
+    // .forEach(r => {
+    //   if(resourceContractAccountIds.has(r.receiverId)) {
+    //     if("Action" in r.receipt) {
+    //       const action = r.receipt.Action
+    //       action.actions.forEach((a: types.Action) => {
+    //         if(a !== "CreateAccount" && "FunctionCall" in a) {
+    //           const functionCall = a.FunctionCall
+    //           if(functionCall.methodName == 'book') {
+    //             let args = parseArgs(functionCall.args)
+    //             let resourceName = r.receiverId.slice(0, - ( 1 + CONTACT_ADDR.length))
+    //             handleBook(resourceName, action.signerId, args) 
+    //           }
+    //         }
+    //       })
+    //     }
+    //   } else if(r.receiverId == CONTACT_ADDR) {
+    //     if("Action" in r.receipt) {
+    //       const action = r.receipt.Action
+    //       action.actions.forEach((a: types.Action) => {
+    //         if(a !== "CreateAccount" && "FunctionCall" in a) {
+    //           const functionCall = a.FunctionCall
+    //           if(functionCall.methodName == 'create_resource') {
+    //             let args = parseArgs(functionCall.args)
+    //             handleCreateResource(args)
+    //           }
+    //           if(functionCall.methodName == 'create_resource_callback') {
+    //             // TODO: log event, to make sure contract creation has been successful - only then store to db
+    //             console.log(JSON.stringify(functionCall))
+    //           }
+    //         }
+    //       })
+    //     }
+    //   }
+    // })
 }
 
-function parseArgs(s: string) {
-  const argsString = Buffer.from(s, 'base64').toString('utf8')
-  return JSON.parse(argsString) 
-}
+// function parseArgs(s: string) {
+//   const argsString = Buffer.from(s, 'base64').toString('utf8')
+//   return JSON.parse(argsString) 
+// }
 
 // let checkId 
 //   if(checkId == undefined) {
@@ -76,7 +117,7 @@ function prepareStatements() {
   createResourceQuery = db.prepare(`INSERT INTO resources VALUES (${nArgs(11)})`)
   addResourceImageQuery = db.prepare("INSERT INTO resource_images VALUES (?,?,?)")
   addResourceTagQuery = db.prepare("INSERT INTO resource_tags VALUES (?,?)")
-  createBookingQuery = db.prepare(`INSERT INTO bookings VALUES (${nArgs(4)})`)
+  createBookingQuery = db.prepare(`INSERT INTO bookings VALUES (${nArgs(6)})`)
 }
 function finalizePreparedStatements() {
   createResourceQuery.finalize() 
@@ -96,14 +137,13 @@ function transformCoordinates(lat: number, lon: number){
     return [x,y,z];
 }
 
-async function handleCreateResource(args: any) {
-  console.log(`create_resource(\n${JSON.stringify(args, null, ' ')})\n)`) 
-  let rip = args.resource_init_params
+async function handleCreateResource(name: string, rip: any) {
+  console.log(`create_resource(${name}, \n${JSON.stringify(rip, null, ' ')})\n)`) 
 
   let [x, y, z] = transformCoordinates(rip.coordinates[0], rip.coordinates[1]) 
 
   createResourceQuery.run(
-    args.name, 
+    name, 
 
     rip.title, 
     rip.description, 
@@ -119,18 +159,18 @@ async function handleCreateResource(args: any) {
   )
   if(rip.image_urls) {
     rip.image_urls.forEach((url: string, i: number) => {
-      addResourceImageQuery.run(args.name, url, i)
+      addResourceImageQuery.run(name, url, i)
     }) 
   }
   if(rip.tags) {
     rip.tags.forEach((tag: string) => {
-      addResourceTagQuery.run(tag, args.name)
+      addResourceTagQuery.run(tag, name)
     }) 
   }
 
   // add new contract to the list
   resourceContractAccountIds.add(
-    makeResourceContractAccountId(args.name)
+    makeResourceContractAccountId(name)
   ) 
 }
 
@@ -139,18 +179,6 @@ function makeResourceContractAccountId(resourceName: string) {
 }
 
 async function handleBook(resourceName: string, bookerAccountId: string, args: any) {
-  console.log(`book(\n${JSON.stringify(args, null, ' ')})\n)\nsigner: ${bookerAccountId}\nresource: ${resourceName}`)
-  createBookingQuery.run(
-    resourceName, 
-    bookerAccountId, 
-    args.start, 
-    args.end,
-    (_runResult: sqlite3.RunResult, err: Error) => {
-      if(err) {
-        console.log("error creating booking: " + err) 
-      }
-    }
-  ) 
 }
 
 
