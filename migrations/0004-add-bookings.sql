@@ -6,6 +6,6 @@ CREATE TABLE bookings (
   booker_account_id TEXT, 
   start INTEGER, 
   end INTEGER, 
-  price TEXT, 
+  price REAL, 
   FOREIGN KEY (resource_name) REFERENCES resources (name) 
 );

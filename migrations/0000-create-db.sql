@@ -2,6 +2,9 @@ DROP TABLE IF EXISTS resources;
 
 CREATE TABLE resources (
   name VARCHAR(36) PRIMARY KEY,  /* [2] */
+
+  owner_account_id TEXT, 
+
   title VARCHAR(256), 
   description TEXT, 
   contact_info TEXT, 

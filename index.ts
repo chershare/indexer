@@ -27,10 +27,10 @@ async function handleStreamerMessage(
     .forEach(outcome => {
       const receiverId = outcome.receipt.receiverId
       if(resourceContractAccountIds.has(receiverId)) {
+        let resourceName = receiverId.slice(0, - ( 1 + CONTACT_ADDR.length))
         outcome.executionOutcome.outcome.logs.forEach(log => {
           let [event, data] = parseLog(log) 
           if(event == 'BookingCreation') {
-            let resourceName = receiverId.slice(0, - ( 1 + CONTACT_ADDR.length))
             console.log(`book(\n${JSON.stringify(data, null, ' ')})\n)`)
             createBookingQuery.run(
               data.id, 
@@ -45,6 +45,9 @@ async function handleStreamerMessage(
                 }
               }
             ) 
+          } else if(event == 'BookingCancellation') {
+            console.log('cancel', data) 
+            removeBookingQuery.run(receiverId, data.id)
           }
         }) 
       } else if (receiverId == CONTACT_ADDR) {
@@ -52,7 +55,7 @@ async function handleStreamerMessage(
           let [event, data] = parseLog(log) 
           if(event == 'ResourceCreation') {
             console.log('resource created', JSON.stringify(data)) 
-            handleCreateResource(data.name, data.init_params) 
+            handleCreateResource(data) 
           }
         }) 
       }
@@ -110,19 +113,23 @@ let createResourceQuery : sqlite3.Statement
 let addResourceImageQuery: sqlite3.Statement
 let addResourceTagQuery: sqlite3.Statement
 let createBookingQuery: sqlite3.Statement
+let removeBookingQuery: sqlite3.Statement
 function prepareStatements() {
   function nArgs(n: number) {
     return "?,".repeat(n).slice(0,-1)
   }
-  createResourceQuery = db.prepare(`INSERT INTO resources VALUES (${nArgs(11)})`)
+  createResourceQuery = db.prepare(`INSERT INTO resources VALUES (${nArgs(12)})`)
   addResourceImageQuery = db.prepare("INSERT INTO resource_images VALUES (?,?,?)")
   addResourceTagQuery = db.prepare("INSERT INTO resource_tags VALUES (?,?)")
   createBookingQuery = db.prepare(`INSERT INTO bookings VALUES (${nArgs(6)})`)
+  removeBookingQuery = db.prepare(`DELETE FROM bookings WHERE resource_name == ? AND local_id == ?`)
 }
 function finalizePreparedStatements() {
   createResourceQuery.finalize() 
   addResourceImageQuery.finalize()
   addResourceTagQuery.finalize()
+  createBookingQuery.finalize()
+  removeBookingQuery.finalize()
 }
 
 const EARTH_RADIUS_KM = 6371
@@ -137,13 +144,18 @@ function transformCoordinates(lat: number, lon: number){
     return [x,y,z];
 }
 
-async function handleCreateResource(name: string, rip: any) {
+async function handleCreateResource(data: any) {
+  const name = data.name
+  const owner = data.owner
+  const rip = data.init_params
+
   console.log(`create_resource(${name}, \n${JSON.stringify(rip, null, ' ')})\n)`) 
 
   let [x, y, z] = transformCoordinates(rip.coordinates[0], rip.coordinates[1]) 
 
   createResourceQuery.run(
     name, 
+    owner, 
 
     rip.title, 
     rip.description, 
@@ -177,10 +189,6 @@ async function handleCreateResource(name: string, rip: any) {
 function makeResourceContractAccountId(resourceName: string) {
   return resourceName + "." + CONTACT_ADDR 
 }
-
-async function handleBook(resourceName: string, bookerAccountId: string, args: any) {
-}
-
 
 function connectToDb() {
   return new Promise<void>((resolve, reject) => {
